@@ -1,0 +1,190 @@
+#!/usr/bin/env python -B
+"""
+Easy changelog helps manage changelog updates.
+"""
+
+from __future__ import print_function
+
+import sys
+from argparse import ArgumentParser
+from datetime import datetime
+from os.path import exists
+from re import match
+
+PARSER = ArgumentParser(
+    prog="easy_changelog", description="Changelog update utility.")
+COMMANDS = PARSER.add_subparsers(
+    dest="command", title="Commands", help="subcomand to run")
+PREPARE = COMMANDS.add_parser("prepare")
+PREPARE.add_argument("owner", help="Project owner or organization")
+PREPARE.add_argument("project_name", help="Project name")
+RELEASE_COMMAND = COMMANDS.add_parser("release")
+RELEASE_COMMAND.add_argument("version", help="Release version")
+
+
+class Tag():
+    """
+    Tag used to match against fields in a file
+    """
+
+    def __init__(self, tag):
+        self.tag = tag
+
+    def __repr__(self):
+        return "[//]: # (<{}>)".format(self.tag)
+
+
+END = Tag("end")
+PRERELEASE = Tag("pre_release")
+RELEASE = Tag("release")
+
+
+def find_and_replace(template, instance, replacement_pairs):
+    """
+    Instantiates a templated document replacing given patterns with paired replacement value.
+    """
+    for line in template:
+        for pair in replacement_pairs.items():
+            line = line.replace(*pair)
+        print(line, end='', file=instance)
+
+
+def prepare(owner, project_name):
+    """
+    Create an instance of a project CHANGELOG replacing owner name and project name in the document
+    """
+    try:
+        if not exists("CHANGELOG.md.template"):
+            raise FileNotFoundError
+        with open("CHANGELOG.md.template", "r") as template, \
+                open("CHANGELOG.md", "w") as changelog:
+            find_and_replace(template, changelog, {
+                "${OWNER}": owner,
+                "${PROJECT_NAME}": project_name
+            })
+    except FileNotFoundError:
+        print("CHANGELOG.md was not found")
+        sys.exit(1)
+
+
+def find_vars(lines, begin_tag, end_tag=END):
+    """
+    Find values stored in the document.
+    """
+    matches = dict()
+    end = len(lines)
+    for i in range(end):
+        line = lines[i]
+        if line.rstrip() == repr(begin_tag):
+            for j in range(i, end):
+                line = lines[j]
+                if line == repr(end_tag):
+                    break
+                capture_groups = match(r"\[<(.*)>\]: # \((.*)\)", line)
+                if capture_groups is not None \
+                   and len(capture_groups.groups()) > 0:
+                    name = capture_groups.group(1)
+                    value = capture_groups.group(2)
+                    matches[name] = value
+    return matches
+
+
+def get_lines(filename):
+    try:
+        if not exists(filename):
+            raise FileNotFoundError
+        with open(filename, "r") as file:
+            return [line for line in file.readlines()]
+    except FileNotFoundError:
+        print("{} was not found".format(filename))
+        sys.exit(1)
+
+
+def skip_until(interval, lines, test):
+    for i in interval:
+        line = lines[i]
+        if test(line):
+            return i
+
+
+def insert_into_file(interval, lines_to_insert, lines, file):
+    file.write(lines_to_insert)
+    last = skip_until(interval, lines, lambda line: line.rstrip() == repr(END))
+    file.write(lines[last])
+    return last
+
+
+def release(version, description_count=4):
+    """
+    Add new release to changelog with supplied release version
+    """
+    today = datetime.now()
+    iso_date = {
+        "year": "{}".format(today.year),
+        "month": "{}".format(today.month),
+        "day": "{}".format(today.day)
+    }
+    lines = get_lines("CHANGELOG.md")
+    changelog_vars = find_vars(
+        lines,
+        Tag("values"),
+    )
+    pre_release = "\n\n".join([
+        changelog_vars["pre_release_header"],
+        changelog_vars["pre_release_description"],
+        changelog_vars["pre_release_ref"].format(
+            compare=changelog_vars["compare"]).format(
+                previous=version,
+                current="HEAD",
+            )
+    ]) + "\n"
+    new_release = "\n\n".join([
+        changelog_vars["release_header"].format(version=version, **iso_date),
+        "\n".join([changelog_vars["release_description"]] * description_count),
+        changelog_vars["release_ref"].format(
+            version=version,
+            compare=changelog_vars["compare"].format(
+                previous=changelog_vars["current"],
+                current=version,
+            ),
+        )
+    ]) + "\n"
+    with open("CHANGELOG.md", "w+") as changelog:
+        i = 0
+        end = len(lines)
+        while i < end:
+            line = lines[i]
+            if line.rstrip() == "[<current>]: # ({})".format(
+                    changelog_vars["current"]):
+                changelog.write(
+                    line.replace(changelog_vars["current"], version))
+            else:
+                changelog.write(line)
+
+            if line.rstrip() == repr(PRERELEASE):
+                i = insert_into_file(
+                    range(i, end), pre_release, lines, changelog)
+            elif line.rstrip() == repr(RELEASE):
+                last = insert_into_file(
+                    range(i, end),
+                    new_release,
+                    lines,
+                    changelog,
+                )
+                changelog.write("".join(lines[i + 1:last]))
+                i = last
+            i += 1
+
+
+if __name__ == "__main__":
+    ARGS = PARSER.parse_args()
+
+    if ARGS.command == "prepare":
+        prepare(ARGS.owner, ARGS.project_name)
+    elif ARGS.command == "release":
+        release(ARGS.version)
+    elif ARGS.command is None:
+        PARSER.print_help()
+    else:
+        print("Command not recognized")
+        sys.exit(1)
