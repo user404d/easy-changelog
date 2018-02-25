@@ -8,7 +8,7 @@
 [<release_header>]: # (## [{version}] - {year}-{month}-{day})
 [<release_description>]: # (*)
 [<release_ref>]: # ([{version}]: {compare})
-[<current>]: # (v0.0.0)
+[<current>]: # (v0.0.1)
 [//]: # (<end>)
 
 All notable changes to easy-changelog will be documented in this file.
@@ -21,10 +21,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
  
 
-[Unreleased]: https://github.com/user404d/easy-changelog/compare/v0.0.0...HEAD
+[Unreleased]: https://github.com/user404d/easy-changelog/compare/v0.0.1...HEAD
 [//]: # (<end>)
 
 [//]: # (<release>)
+## [v0.0.1] - 2018-2-24
+
+* Simple example added in [README](README.md)
+
+[v0.0.1]: https://github.com/user404d/easy-changelog/compare/v0.0.0...v0.0.1
+[//]: # (<end>)
 ## [v0.0.0] - 2018-2-24
 
 ### Added
@@ -32,4 +38,3 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 * `easy_changelog` utility
 
 [v0.0.0]: https://github.com/user404d/easy-changelog/compare/v0.0.0...v0.0.0
-[//]: # (<end>)
