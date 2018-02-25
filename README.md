@@ -24,3 +24,11 @@ Create `CHANGELOG.md` from template by inserting project owner and project name 
 ### Release
 
 Create a new release entry with supplied version in the `CHANGELOG.md`. Updates unreleased reference and will create a comparison to the last known release.
+
+### Example
+
+```sh
+> ./easy_changelog release $(npm version 1.0.0)
+```
+
+The above will update your npm project version and update your `CHANGELOG.md` where you can add any details about the new release.
