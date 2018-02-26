@@ -10,6 +10,7 @@ from argparse import ArgumentParser
 from datetime import datetime
 from os.path import exists
 from re import match
+from string import Template
 
 PARSER = ArgumentParser(
     prog="easy_changelog", description="Changelog update utility.")
@@ -39,17 +40,14 @@ PRERELEASE = Tag("pre_release")
 RELEASE = Tag("release")
 
 
-def find_and_replace(template, instance, replacement_pairs):
+def find_and_replace(template, substitutions):
     """
     Instantiates a templated document replacing given patterns with paired replacement value.
     """
-    for line in template:
-        for pair in replacement_pairs.items():
-            line = line.replace(*pair)
-        print(line, end='', file=instance)
+    return [Template(line).safe_substitute(substitutions) for line in template]
 
 
-def prepare(owner, project_name):
+def prepare(**substitutions):
     """
     Create an instance of a project CHANGELOG replacing owner name and project name in the document
     """
@@ -58,10 +56,8 @@ def prepare(owner, project_name):
             raise FileNotFoundError
         with open("CHANGELOG.md.template", "r") as template, \
                 open("CHANGELOG.md", "w") as changelog:
-            find_and_replace(template, changelog, {
-                "${OWNER}": owner,
-                "${PROJECT_NAME}": project_name
-            })
+            subbed = find_and_replace(template, substitutions)
+            changelog.writelines(subbed)
     except FileNotFoundError:
         print("CHANGELOG.md was not found")
         sys.exit(1)
@@ -114,41 +110,39 @@ def insert_into_file(interval, lines_to_insert, lines, file):
     return last
 
 
-def release(version, description_count=4):
+def release(**substitutions):
     """
     Add new release to changelog with supplied release version
     """
     today = datetime.now()
-    iso_date = {
+    substitutions.update({
         "year": "{}".format(today.year),
         "month": "{}".format(today.month),
-        "day": "{}".format(today.day)
-    }
+        "day": "{}".format(today.day),
+        "sep": "\n\n"
+    })
     lines = get_lines("CHANGELOG.md")
     changelog_vars = find_vars(
         lines,
         Tag("values"),
     )
-    pre_release = "\n\n".join([
+    pre_release = Template("${sep}".join([
         changelog_vars["pre_release_header"],
         changelog_vars["pre_release_description"],
-        changelog_vars["pre_release_ref"].format(
-            compare=changelog_vars["compare"]).format(
-                previous=version,
+        Template(changelog_vars["pre_release_ref"]).safe_substitute(
+            compare=Template(changelog_vars["compare"]).safe_substitute(
+                previous=substitutions["version"],
                 current="HEAD",
-            )
-    ]) + "\n"
-    new_release = "\n\n".join([
-        changelog_vars["release_header"].format(version=version, **iso_date),
-        "\n".join([changelog_vars["release_description"]] * description_count),
-        changelog_vars["release_ref"].format(
-            version=version,
-            compare=changelog_vars["compare"].format(
+            ))
+    ]) + "\n").safe_substitute(substitutions)
+    new_release = Template("${sep}".join([
+        changelog_vars["release_header"], changelog_vars["release_description"],
+        Template(changelog_vars["release_ref"]).safe_substitute(
+            compare=Template(changelog_vars["compare"]).safe_substitute(
                 previous=changelog_vars["current"],
-                current=version,
-            ),
-        )
-    ]) + "\n"
+                current=substitutions["version"],
+            ))
+    ]) + "\n").safe_substitute(substitutions)
     with open("CHANGELOG.md", "w+") as changelog:
         i = 0
         end = len(lines)
@@ -157,7 +151,8 @@ def release(version, description_count=4):
             if line.rstrip() == "[<current>]: # ({})".format(
                     changelog_vars["current"]):
                 changelog.write(
-                    line.replace(changelog_vars["current"], version))
+                    line.replace(changelog_vars["current"],
+                                 substitutions["version"]))
             else:
                 changelog.write(line)
 
@@ -180,9 +175,9 @@ if __name__ == "__main__":
     ARGS = PARSER.parse_args()
 
     if ARGS.command == "prepare":
-        prepare(ARGS.owner, ARGS.project_name)
+        prepare(owner=ARGS.owner, project_name=ARGS.project_name)
     elif ARGS.command == "release":
-        release(ARGS.version)
+        release(version=ARGS.version)
     elif ARGS.command is None:
         PARSER.print_help()
     else:
