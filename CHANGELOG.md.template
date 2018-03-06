@@ -22,4 +22,4 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 [//]: # (<release>)
 [//]: # (<end>)
 
-[${owner}/${project_name}]: (https://github.com/${owner}/${project_name})
+[${owner}/${project_name}]: https://github.com/${owner}/${project_name}
